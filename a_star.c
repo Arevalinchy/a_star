@@ -137,40 +137,19 @@ int fcmp_noeud(const void *x, const void *y) {
 }
 
 
-node createNode(position pos, int cout, int score, int h){
-  node noeud = malloc(sizeof(*noeud));
+node createNode(position pos, double cout, node parent ,int h){
+  //node noeud = malloc(sizeof(*noeud));
+  node noeud;
   noeud -> pos = pos;
   noeud -> cost = cout;        
   noeud -> score =  cout + h; 
-  noeud -> parent = NULL;
+  noeud -> parent = parent;
   return noeud;
 }
 
 double A_star(grid G, heuristic h){
 
-  position s = G.start;
-  position t = G.end; 
-  
-  
-  /*Premiere Partie*/
-  /* P = vide */
-  //int P = MK_USED;
-
-  /* Q = {S} */
-  int n = G.X * G.Y; 
-  heap Q = heap_create(n,fcmp_noeud); 
-  node S = createNode(s, 0,0,  h);
-  heap_add(Q,S);
-
-  /*Coût[S] = 0*/
-
-  /*c'est pour chaque noeud ???????????*/
- // int cout[s] = 0;
- // int parent[s] = l;
-
-  //score[s] = cout[s] + h(s,t).
- 
-
+  printf("C'est parti");
   // Pensez à dessiner la grille avec drawGrid(G) à chaque fois que
   // possible, pour visualiser le comportement de votre algorithme.
   // Par exemple, dès vous ajoutez un sommet à P mais aussi lorsque
@@ -185,7 +164,7 @@ double A_star(grid G, heuristic h){
 
   // Les bords de la grille sont toujours constitués de murs (texture
   // TX_WALL) ce qui évite d'avoir à tester la validité des indices
-  // des positions (sentinelle). Dit autrement, un chemin ne peut pas
+  // des positions (sentinelle). Dit autrement, un chemin ne peut pas                                                                                         
   // s'échapper de la grille.
 
   // Lorsque que vous ajoutez un élément au tas, pensez à tester la
@@ -198,28 +177,71 @@ double A_star(grid G, heuristic h){
   // arriver. C'est autant de "segmentation fault" que vous pouvez
   // éviter.
 
+  position s = G.start;
+  position t = G.end; 
+  
+  
+  /*Premiere Partie*/
+  /*P := ∅*/
+  // Par defaut le objet G.Mark[x][y] = MK_NULL par tous les points dans la grid.
 
+  /* Q = {S} */
+  int n = G.X * G.Y; 
+  heap Q = heap_create(n,fcmp_noeud); 
+  node S = createNode(s, 0, NULL, h(s,t,&G)); /*coût[s] := 0 parent[s] := ⊥, score[s] := coût[s] + h(s, t)*/
+  bool cool = heap_add(Q,S);
+  printf("paso: %d\n", cool);
   /*Deuxieme Partie*/
   while(!heap_empty(Q)){
-      void *u = heap_top(Q);
-      printf("affichant d%", u->score);
-      /*A*/
-      //if(score[u]){
-      //   heap_pop(Q);
-      //}
-      /*B*/
-      //if ( u == t)  return G.end;
-      /*C*/
-      // P[n++] = u;
-      /*D*/
-      /*for(int i = 0; i < sizeof(P); i++){
+    /*A)*/
+    node u = heap_top(Q);
+    heap_pop(Q);
+    /*B)*/
+    position uPos = u->pos;
+    if((uPos.x == t.x) && (uPos.y == t.y)){
+        //node chmn = u->parent; 
+        return u->score;
+    }
+    /*C)*/
+    G.mark[u->pos.x][u->pos.y] = MK_USED;
 
-      }*/
+    /*D)*/
+    for(int x = u->pos.x-1; x <= u->pos.x+1; x++){
+      for(int y = u->pos.y-1; y <= u->pos.y+1; y++){
+          position v;
+          v.x = x;
+          v.y = y;
+          node V = createNode(v, 0, NULL, h(v,t,&G)); 
+          double c = u->cost + weight[G.texture[x][y]];
+
+          /*for(int i = 2; i < Q->n; i++){
+            if(V != Q->array[i]){
+            heap_add(Q,V); 
+            }else if(c < V->cost){
+              break;
+            }
+          }*/
+          
+          V->cost = c;
+          V->parent = u;
+          V->score = V->cost + h(u->pos,t,&G);
+      } 
+    }
+
   }
+  
+// Pour gérer l'ensemble Q, vous devez utiliser un tas min de noeuds
+// (type node) avec une fonction de comparaison (à créer) qui dépend
+// du champs .score des noeuds. Pour la fonction de comparaison
+// inspirez vous de test_heap.c et faites attention au fait que
+// l'expression '2.1 - 2.2' une fois castée en 'int' n'est pas
+// négative, mais nulle !
+
 
 
 
   /*Troisème Partie*/
+
   return -1;
 }
 
@@ -339,7 +361,7 @@ int main(int argc, char *argv[]){
   init_SDL_OpenGL(); // à mettre avant le 1er "draw"
   drawGrid(G); // dessin de la grille avant l'algo
   update = false; // accélère les dessins répétitifs
-
+  
   double d = A_star(G,halpha); // heuristique: h0, hvo, alpha×hvo
 
   // chemin trouvé ou pas ?
