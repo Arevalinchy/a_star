@@ -132,24 +132,39 @@ double weight[]={
 // Q. Cela ne sert pas à grand chose, car s'il est dans Q, vous ne
 // pourrez pas déplacer le noeud correspondant pour le mettre au bon
 // endroit dans Q en fonction de la mise à jour de son score.
+
+
 int fcmp_noeud(const void *x, const void *y) {
-  return (*(node*)x)->score - (*(node*)y)->score;
+  const double a = (*(node*)x)->score;
+  const double b = (*(node*)y)->score;
+  return (a<b)? -1 : (a>b); 
 }
 
 
-node createNode(position pos, double cout, node parent ,int h){
-  //node noeud = malloc(sizeof(*noeud));
-  node noeud;
+node createNode(position pos, double cout, node parent , position t, grid G, heuristic h){
+  node noeud = malloc(sizeof(*noeud));
+  //node noeud;
   noeud -> pos = pos;
   noeud -> cost = cout;        
-  noeud -> score =  cout + h; 
+  noeud -> score = cout + h(pos,t,&G); 
   noeud -> parent = parent;
   return noeud;
 }
 
+bool nodeInHeap(heap h, node V){
+  for(int i = 1; i<= h->n; i++) if((V->pos.x == (*(node *) h->array[i])->pos.x ) && (V->pos.y == (*(node *) h->array[i])->pos.y ) ) return true;
+  return false;
+}
+
+int getPos(heap h, node V){
+  if(!heap_empty(h)){
+    for(int i = 1; i<= h->n; i++) if((V->pos.x == (*(node *) h->array[i])->pos.x ) && (V->pos.y == (*(node *) h->array[i])->pos.y ) ) return i;
+  }
+  return -1;
+}
+
 double A_star(grid G, heuristic h){
 
-  printf("C'est parti");
   // Pensez à dessiner la grille avec drawGrid(G) à chaque fois que
   // possible, pour visualiser le comportement de votre algorithme.
   // Par exemple, dès vous ajoutez un sommet à P mais aussi lorsque
@@ -164,7 +179,7 @@ double A_star(grid G, heuristic h){
 
   // Les bords de la grille sont toujours constitués de murs (texture
   // TX_WALL) ce qui évite d'avoir à tester la validité des indices
-  // des positions (sentinelle). Dit autrement, un chemin ne peut pas                                                                                         
+  // des positions (sentinelle). Dit autrement, un chemin ne peut pas
   // s'échapper de la grille.
 
   // Lorsque que vous ajoutez un élément au tas, pensez à tester la
@@ -177,6 +192,7 @@ double A_star(grid G, heuristic h){
   // arriver. C'est autant de "segmentation fault" que vous pouvez
   // éviter.
 
+
   position s = G.start;
   position t = G.end; 
   
@@ -186,60 +202,82 @@ double A_star(grid G, heuristic h){
   // Par defaut le objet G.Mark[x][y] = MK_NULL par tous les points dans la grid.
 
   /* Q = {S} */
-  int n = G.X * G.Y; 
+  //printf("works? %d", G.mark[G.X-1][G.Y]); -> ca montre que il y a seulement G.X-1 * G.Y possibles
+  int n = (G.X-1) * G.Y; //
+  printf("Dimenstion:(%d,%d) | n = %d\n", G.X, G.Y, n);
   heap Q = heap_create(n,fcmp_noeud); 
-  node S = createNode(s, 0, NULL, h(s,t,&G)); /*coût[s] := 0 parent[s] := ⊥, score[s] := coût[s] + h(s, t)*/
-  bool cool = heap_add(Q,S);
-  printf("paso: %d\n", cool);
-  /*Deuxieme Partie*/
+  node S = createNode(s, 0, NULL, t, G, h); /*coût[s] := 0 parent[s] := ⊥, score[s] := coût[s] + h(s, t)*/
+  printf("S:(%d ,%d) \n", S->pos.x,S->pos.y);
+  heap_add(Q,&S);
+  G.mark[S->pos.x][S->pos.y] = MK_FRONT;
+  //Deuxieme Partie
+  int compteur = 1;
   while(!heap_empty(Q)){
-    /*A)*/
-    node u = heap_top(Q);
-    heap_pop(Q);
-    /*B)*/
-    position uPos = u->pos;
+    //A)
+
+    void *u =  heap_pop(Q);
+    //B)
+    node *U = ((node*)u);
+    position uPos = (*U)->pos;
+    printf("U = (%d,%d)\n", uPos.x,uPos.y);
+    printf("t = (%d,%d)\n", t.x,t.y);
+    //printf("X avec pointeur: %d\n",(*(node*)u)->pos.x); //Pourqoui ((node*)u)[0] <<revien>> le objet node ? il a relation avec le poiteur ? avec void ? ou le deux ? 
+    //En verite les objet d'heap ou tas minimum son de type void, donc la facion de l'appeller c'est (<datatype>*)u pour avoir la direction en memoire et .
+    //*(<datatype>*)u pour le valeur.
+
     if((uPos.x == t.x) && (uPos.y == t.y)){
-        //node chmn = u->parent; 
-        return u->score;
+        return (*U)->score;
     }
-    /*C)*/
-    G.mark[u->pos.x][u->pos.y] = MK_USED;
+    //C)
+    G.mark[uPos.x][uPos.y] = MK_USED;
+    
+    //D)
+    //Relire l'algorithme, reviser qui sont les <<etages>> suivantes. 
 
-    /*D)*/
-    for(int x = u->pos.x-1; x <= u->pos.x+1; x++){
-      for(int y = u->pos.y-1; y <= u->pos.y+1; y++){
-          position v;
-          v.x = x;
-          v.y = y;
-          node V = createNode(v, 0, NULL, h(v,t,&G)); 
-          double c = u->cost + weight[G.texture[x][y]];
+    //Pour tout voisin v pas en P de u
 
-          /*for(int i = 2; i < Q->n; i++){
-            if(V != Q->array[i]){
-            heap_add(Q,V); 
-            }else if(c < V->cost){
-              break;
+    printf("Boucle numero: %d\n", compteur);
+   
+    for(int x = uPos.x-1; x <= uPos.x+1; x++){
+      for(int y = uPos.y-1; y <= uPos.y+1; y++){
+          if(x >= G.X || y > G.Y) break;
+          if(x < 0) x = abs(x);
+          if(y < 0) y = abs(y);
+
+          printf("Point: (%d,%d)\n",x,y);
+          if(x == uPos.x && y == uPos.y) continue;
+          printf("Point in P: %d \n",G.mark[x][y] ==  MK_USED);
+
+          if ( G.mark[x][y] != MK_USED ){
+            position v = {x,y};
+            double cout = sqrt(pow(v.x-uPos.x,2) + pow(v.y-uPos.y,2));
+            node V = createNode(v, cout, NULL,t,G, h);  //Segmentation fault pour penser en cout[V] = +infit*
+            double c = ((*U)->cost )+ weight[G.texture[x][y]];
+
+            if(!nodeInHeap(Q,V) ){
+              printf("inserting: (%d,%d) dans Q \n",V->pos.x,V->pos.y);
+              heap_add(Q,&V);
+              G.mark[x][y] = MK_FRONT;
+              
+            }else if (c >= V->cost){
+              continue;
             }
-          }*/
-          
-          V->cost = c;
-          V->parent = u;
-          V->score = V->cost + h(u->pos,t,&G);
-      } 
-    }
+            
+            int a = getPos(Q,V);
+            printf("a: %d\n", a);
+            (*(node *) Q->array[a])->cost = c;
+            (*(node *) Q->array[a])->parent = *U;
+            (*(node *) Q->array[a])->score = V->cost + h(V->pos,t,&G);
 
+            printf("new score: %f\n",(*(node *) Q->array[a])->score = V->cost + h(V->pos,t,&G) );
+        }
+      } 
+    } 
+    compteur+=1;
+    
   }
   
-// Pour gérer l'ensemble Q, vous devez utiliser un tas min de noeuds
-// (type node) avec une fonction de comparaison (à créer) qui dépend
-// du champs .score des noeuds. Pour la fonction de comparaison
-// inspirez vous de test_heap.c et faites attention au fait que
-// l'expression '2.1 - 2.2' une fois castée en 'int' n'est pas
-// négative, mais nulle !
-
-
-
-
+  printf("MPT: %d\n", heap_empty(Q));
   /*Troisème Partie*/
 
   return -1;
@@ -361,7 +399,7 @@ int main(int argc, char *argv[]){
   init_SDL_OpenGL(); // à mettre avant le 1er "draw"
   drawGrid(G); // dessin de la grille avant l'algo
   update = false; // accélère les dessins répétitifs
-  
+
   double d = A_star(G,halpha); // heuristique: h0, hvo, alpha×hvo
 
   // chemin trouvé ou pas ?
